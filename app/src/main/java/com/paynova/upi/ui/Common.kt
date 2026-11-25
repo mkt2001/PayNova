@@ -74,12 +74,12 @@ val Red = Color(0xFFC62828)
 @Composable
 fun PayNovaTheme(dark: Boolean, content: @Composable () -> Unit) {
     val scheme = if (dark) darkColorScheme(
-        primary = Color(0xFFD7A8F5), onPrimary = Purple, secondary = Violet,
+        primary = Color(0xFFD7A8F5), onPrimary = Purple, secondary = Violet, secondaryContainer = Color(0xFF4A1D5E),
         background = Color(0xFF120016), surface = Color(0xFF1C0A22),
         onBackground = Color(0xFFF2E8F6), onSurface = Color(0xFFF2E8F6),
         surfaceVariant = Color(0xFF2A1531), primaryContainer = Color(0xFF3A1546), onPrimaryContainer = Color(0xFFF2E8F6)
     ) else lightColorScheme(
-        primary = Purple, onPrimary = Color.White, secondary = Violet,
+        primary = Color(0xFF7B2CBF), onPrimary = Color.White, secondary = Violet, secondaryContainer = Color(0xFFEBD3FA),
         background = Color.White, surface = Color.White, onBackground = Ink, onSurface = Ink,
         surfaceVariant = CardBg, primaryContainer = LightPurple, onPrimaryContainer = Purple
     )
