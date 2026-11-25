@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  SUPPORT
+  ADMIN
+  SUPERADMIN
+}
+
+enum TxStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+model User {
+  id              String          @id @default(uuid())
+  email           String          @unique
+  passwordHash    String
+  name            String?
+  mobile          String?         @unique
+  upiId           String?
+  role            Role            @default(USER)
+  contactsConsent Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  devices         Device[]
+  transactions    Transaction[]
+  beneficiaries   Beneficiary[]
+  notifications   Notification[]
+  rewards         RewardLedger[]
+  tickets         SupportTicket[]
+}
+
+model Device {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  fcmToken  String
+  platform  String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, fcmToken])
+}
+
+model Beneficiary {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  name      String
+  vpa       String
+  favourite Boolean @default(false)
+
+  @@unique([userId, vpa])
+}
+
+model Transaction {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  idempotencyKey   String
+  counterpartyName String?
+  counterpartyVpa  String
+  amountPaise      BigInt
+  direction        String   @default("SENT")
+  status           TxStatus @default(PENDING)
+  method           String
+  note             String?
+  category         String?
+  providerRef      String   @unique
+  upiTxnId         String?
+  maskedAccount    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  receivedAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model RewardLedger {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  coins     Int
+  reason    String
+  txId      String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, txId])
+}
+
+model Offer {
+  id        String   @id @default(uuid())
+  title     String
+  body      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String
+  action    String
+  target    String?
+  createdAt DateTime @default(now())
+}

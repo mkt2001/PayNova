@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PayNova Admin</title>
+<style>
+:root{--p:#26002F;--v:#8C35C9;--lp:#F7EEFC;--g:#079B55}
+body{font-family:system-ui,sans-serif;margin:0;color:#171717;background:#fff}
+header{background:var(--p);color:#fff;padding:12px 20px;display:flex;gap:12px;align-items:center}
+nav{display:flex;gap:6px;flex-wrap:wrap;padding:10px 20px;background:var(--lp)}
+nav button,.btn{background:#fff;border:1px solid var(--v);color:var(--p);border-radius:20px;padding:6px 14px;cursor:pointer}
+nav button.on{background:var(--v);color:#fff}
+main{padding:20px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #eee;padding:8px;text-align:left}
+input,textarea{padding:8px;margin:4px 0;width:100%;max-width:360px;box-sizing:border-box}
+.card{background:var(--lp);padding:14px;border-radius:14px;display:inline-block;margin:6px;min-width:120px}
+.err{color:#c62828}
+</style></head><body>
+<header><b>PayNova Admin</b><span id="who"></span></header>
+<div id="login" style="padding:20px"><h3>Sign in</h3>
+<input id="em" placeholder="admin email"><br><input id="pw" type="password" placeholder="password"><br>
+<button class="btn" onclick="login()">Sign in</button> <span id="msg" class="err"></span>
+<p style="font-size:12px">Roles: ADMIN / SUPERADMIN only. Set API base below if the backend is on another host.</p>
+<input id="base" value="/api"></div>
+<div id="app" style="display:none"><nav id="nav"></nav><main id="main"></main></div>
+<script>
+let T=localStorage.getItem('pn_admin_token')||'';const $=id=>document.getElementById(id);
+const api=async(p,o={})=>{const r=await fetch($('base').value+p,{...o,headers:{'Content-Type':'application/json',Authorization:'Bearer '+T,...(o.headers||{})}});if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.json()};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function login(){try{const r=await fetch($('base').value+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('em').value,password:$('pw').value})});if(!r.ok)throw 0;T=(await r.json()).accessToken;localStorage.setItem('pn_admin_token',T);start()}catch(e){$('msg').textContent='Login failed'}}
+const tabs={Analytics,Users,Transactions,Failed,Provider,Offers,Tickets,Notify,Audit};
+function start(){$('login').style.display='none';$('app').style.display='block';$('nav').innerHTML=Object.keys(tabs).map(k=>`<button onclick="show('${k}',this)">${k}</button>`).join('');show('Analytics')}
+async function show(k,b){document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));try{$('main').innerHTML=await tabs[k]()}catch(e){$('main').innerHTML='<p class="err">'+esc(e.message)+' (admin role required)</p>'}}
+const table=(rows,cols)=>'<table><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+cols.map(c=>'<td>'+esc(c==='createdAt'&&typeof r[c]==='number'?new Date(r[c]).toLocaleString():(c==='amountPaise'?'₹'+(r[c]/100):r[c]))+'</td>').join('')+'</tr>').join('')+'</table>';
+async function Analytics(){const a=await api('/admin/analytics');return Object.entries(a).map(([k,v])=>`<div class="card"><div>${k}</div><b style="font-size:24px">${v}</b></div>`).join('')}
+async function Users(){return table(await api('/admin/users'),['email','name','role','createdAt'])}
+async function Transactions(){return table(await api('/admin/transactions'),['createdAt','counterpartyVpa','amountPaise','status','providerRef'])}
+async function Failed(){return '<h3>Failed / reversed (refund status)</h3>'+table(await api('/admin/failed'),['createdAt','counterpartyVpa','amountPaise','status','providerRef'])}
+async function Provider(){const p=await api('/admin/provider');return `<p>Mode: <b>${esc(p.mode)}</b></p><p>Credentials configured: <b>${p.configured}</b></p><p>Production enabled: <b>${p.productionEnabled}</b></p>`}
+async function Offers(){const o=await api('/admin/offers');return '<h3>New offer</h3><input id="ot" placeholder="title"><br><textarea id="ob" placeholder="details"></textarea><br><button class="btn" onclick="addOffer()">Publish</button>'+table(o,['title','body','active'])}
+async function addOffer(){await api('/admin/offers',{method:'POST',body:JSON.stringify({title:$('ot').value,body:$('ob').value,active:true})});show('Offers')}
+async function Tickets(){return table(await api('/admin/tickets'),['createdAt','message','status','id'])}
+async function Notify(){return '<h3>Broadcast notification</h3><input id="nt" placeholder="title"><br><textarea id="nb" placeholder="message"></textarea><br><button class="btn" onclick="send()">Send to all users</button>'}
+async function send(){const r=await api('/admin/notify',{method:'POST',body:JSON.stringify({title:$('nt').value,body:$('nb').value})});alert('Sent to '+r.sent)}
+async function Audit(){return table(await api('/admin/audit'),['createdAt','actorId','action','target'])}
+if(T)start();
+</script></body></html>

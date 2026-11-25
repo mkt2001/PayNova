@@ -1,0 +1,91 @@
+# Put this file in your repo at:  .github/workflows/build-apk.yml
+# Then upload PayNova.zip to the repo ROOT (GitHub web: Add file > Upload files).
+# On every push it: unzips the project -> builds the APK -> publishes it in GitHub Releases.
+name: Unzip, Build APK & Release
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auto-unzip project
+        id: unzip
+        run: |
+          set -e
+          ZIP=$(ls -1 *.zip 2>/dev/null | head -n 1 || true)
+          if [ -z "$ZIP" ]; then
+            echo "No zip in repo root - building files already in repo."
+            echo "unzipped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Unzipping $ZIP"
+          rm -rf _unz && mkdir _unz
+          unzip -q -o "$ZIP" -d _unz
+          # if the zip has one top-level folder, use its contents
+          COUNT=$(ls -A _unz | wc -l)
+          FIRST=$(ls -A _unz | head -n 1)
+          if [ "$COUNT" -eq 1 ] && [ -d "_unz/$FIRST" ]; then SRC="_unz/$FIRST"; else SRC="_unz"; fi
+          # never overwrite the workflow that is running
+          rsync -a --exclude '.github' "$SRC"/ ./
+          rm -rf _unz
+          git rm -q --cached "$ZIP" || true
+          mkdir -p .zip-archive && mv "$ZIP" .zip-archive/ || true
+          echo "unzipped=true" >> "$GITHUB_OUTPUT"
+          test -f settings.gradle.kts || test -f settings.gradle || { echo "settings.gradle(.kts) not found after unzip"; ls -la; exit 1; }
+
+      - name: Commit extracted files back to repo
+        if: steps.unzip.outputs.unzipped == 'true'
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '.zip-archive/\n' >> .git/info/exclude
+          git add -A
+          git commit -m "Auto-unzip project [skip ci]" || echo "nothing to commit"
+          git push || echo "push skipped"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Run unit tests
+        continue-on-error: true
+        run: gradle :app:testDebugUnitTest --no-daemon
+
+      - name: Prepare APK
+        run: |
+          APK=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          cp "$APK" PayNova.apk
+          ls -lh PayNova.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PayNova-apk
+          path: PayNova.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: PayNova v1.0.${{ github.run_number }}
+          body: |
+            PayNova debug APK (DEMO mode - simulated payments, fake money).
+            Install: download PayNova.apk, allow "install unknown apps", open.
+          files: PayNova.apk
